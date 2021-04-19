@@ -1,2 +1,2 @@
-# COMP8755
-Project for COMP8755-Colorectal Polyp Segmentation using Deep Learning
+# TransInvNet
+TransInvNet, a networking combining Involution Network and Vision Transformer.
