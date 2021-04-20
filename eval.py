@@ -76,7 +76,7 @@ if __name__ == '__main__':
     parser.add_argument('--img_size', type=int,
                         default=352, help='training dataset size')
     parser.add_argument('--weight_path', type=str,
-                        default='outputs/exp04190514/train/TransInvNet-best.pth', help='path to the trained weight')
+                        default='outputs/exp04201134/train/TransInvNet-best.pth', help='path to the trained weight')
     parser.add_argument('--test_path', type=str,
                         default='datasets/polyp-dataset/kvasir/test', help='path to test dataset')
     opt = parser.parse_args()

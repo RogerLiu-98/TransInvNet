@@ -63,7 +63,7 @@ def train(opt, train_loader, model, optimizer, epoch, loss_fn):
         loss /= opt.accumulation_step
         # ---- backward ----
         loss.backward()
-        clip_gradient(optimizer, opt.clip)
+        # clip_gradient(optimizer, opt.clip)
         if i % opt.accumulation_step == 0:
             optimizer.step()
             scheduler.step()
@@ -73,7 +73,7 @@ def train(opt, train_loader, model, optimizer, epoch, loss_fn):
             tbar.set_description('{} Epoch [{:03d}/{:03d}], Step [{:04d}/{:04d}], Train loss {:.04f}'.
                                  format(datetime.now(), epoch, opt.epoch, i, len(train_loader),
                                         np.mean(loss_record)))
-    save_path = 'outputs/{}/'.format(opt.output_path)
+    save_path = 'outputs/{}/train'.format(opt.output_path)
     os.makedirs(save_path, exist_ok=True)
     if epoch % 10 == 0:
         torch.save(model.state_dict(), save_path + 'TransInvNet-%d.pth' % epoch)
@@ -121,12 +121,11 @@ def test(opt, test_loader, model, epoch, loss_fn, best_loss, best_metrics):
     if current_loss < best_loss[-1] or metrics > best_metrics[-1]:
         best_loss.append(current_loss)
         best_metrics.append(metrics)
-        save_path = 'outputs/{}/'.format(opt.output_path)
+        save_path = 'outputs/{}/train'.format(opt.output_path)
         torch.save(model.state_dict(), save_path + 'TransInvNet-best.pth')
         print('[Saving model weight], current best test loss is {:.04f}, current best mean dice is {:.04f}, '
               'current best mean abs error is {:.04f}, current best mean iou is {:.04f}'
               .format(current_loss, np.mean(mDice), np.mean(mMae), np.mean(mIou)))
-    return current_loss, (np.mean(mDice) + np.mean(mIou) + (1 - np.mean(mMae))) / 3
 
 
 if __name__ == '__main__':
@@ -175,8 +174,7 @@ if __name__ == '__main__':
     # CalParams(model, x)
 
     params = model.parameters()
-    optimizer = torch.optim.AdamW(params, opt.lr, weight_decay=1e-3)
-    # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=5)
+    optimizer = torch.optim.AdamW(params, opt.lr, weight_decay=1e-4)
     scheduler = lr_scheduler.CosineAnnealingLR(optimizer, len(train_loader) // opt.accumulation_step)
 
     print("#" * 20, "Start Training", "#" * 20)
@@ -184,5 +182,4 @@ if __name__ == '__main__':
     best_loss, best_metrics = [np.inf], [-np.inf]
     for epoch in range(1, opt.epoch + 1):
         train(opt, train_loader, model, optimizer, epoch, loss_fn)
-        test_loss, metric = test(opt, test_loader, model, epoch, loss_fn, best_loss, best_metrics)
-        # scheduler.step(metric)
+        test(opt, test_loader, model, epoch, loss_fn, best_loss, best_metrics)
