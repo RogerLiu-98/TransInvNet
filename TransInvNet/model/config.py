@@ -57,7 +57,7 @@ def get_r50_b16_config():
     config.classifier = 'seg'
     config.pretrained_path = 'TransInvNet/lib/imagenet21k+imagenet2012_R50+ViT-B_16.npz'
     config.inter_channel = 1024
-    config.decoder_channels = (768, 512, 256, 64)
+    config.decoder_channels = (768, 1024, 512, 256)
     config.rfb_channels = [1024, 512, 256]
     config.scale_factors = [4, 8, 4, 2]
     config.downscale_factors = [1/8, 1/4, 1/2]
@@ -72,7 +72,7 @@ def get_b32_config():
     """Returns the ViT-B/32 configuration."""
     config = get_b16_config()
     config.patches.size = (32, 32)
-    config.pretrained_path = 'TransInvNet/model/vit_checkpoint/imagenet21k/ViT-B_32.npz'
+    config.pretrained_path = '../model/vit_checkpoint/imagenet21k/ViT-B_32.npz'
     return config
 
 
@@ -92,7 +92,7 @@ def get_l16_config():
     # custom
     config.classifier = 'seg'
     config.resnet_pretrained_path = None
-    config.pretrained_path = 'TransInvNet/lib/imagenet21k_ViT-L_16.npz'
+    config.pretrained_path = '../lib/imagenet21k_ViT-L_16.npz'
     config.decoder_channels = (256, 128, 64, 16)
     config.n_classes = 2
     config.activation = 'softmax'

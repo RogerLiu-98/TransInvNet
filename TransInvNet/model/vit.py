@@ -197,6 +197,7 @@ class RFB_modified(nn.Module):
         x = self.relu(x_cat + self.conv_res(x))
         return x
 
+
 class IDA(nn.Module):
     def __init__(self, node_kernel, out_dim, channels, up_factors):
         super(IDA, self).__init__()
@@ -217,7 +218,7 @@ class IDA(nn.Module):
 
         for i in range(1, len(channels)):
             node = Conv2dRelu(out_dim * 2, out_dim, kernel_size=node_kernel, stride=1, padding=node_kernel // 2,
-                               bias=False)
+                              bias=False)
             setattr(self, 'node_' + str(i), node)
 
         for m in self.modules():
@@ -273,15 +274,6 @@ class Embeddings(nn.Module):
                                        base_channels=config.rednet.base_channels,
                                        out_indices=config.rednet.out_indices)
             in_channels = self.hybrid_model.base_channels * 16
-            # self.proj = nn.Sequential(
-            #     Conv2dRelu(config.rednet.out_channels[0], config.rednet.out_channels[0] // 2, kernel_size=1, padding=0, stride=1),
-            #     nn.UpsamplingBilinear2d(scale_factor=2)
-            # )
-            # self.rfbs = nn.ModuleList([nn.Sequential(
-            #     RFB_modified(in_ch, config.inter_channel),
-            #     nn.UpsamplingBilinear2d(scale_factor=2))
-            #     for in_ch in config.rednet.out_channels
-            # ])
             self.projs = nn.ModuleList([nn.Sequential(
                 Conv2dRelu(in_ch, in_ch // 2, kernel_size=1, padding=0, stride=1),
                 nn.UpsamplingBilinear2d(scale_factor=2))
@@ -297,9 +289,6 @@ class Embeddings(nn.Module):
     def forward(self, x):
         if self.hybrid:
             features = self.hybrid_model(x)
-            # x = self.proj(features[0])
-            # for i, rfb in enumerate(self.rfbs):
-            #     features[i] = rfb(features[i])
             for i, proj in enumerate(self.projs):
                 features[i] = proj(features[i])
                 x = features[0]
@@ -459,25 +448,17 @@ class iAFF(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 scale_factor=1 / 8):
+    def __init__(self, scale_factor):
         super(DecoderBlock, self).__init__()
         # self.iaff = iAFF(in_channels, out_channels, r=4)
-        self.proj = Conv2dRelu(in_channels * 2, out_channels, kernel_size=1, padding=0, stride=1)
         self.up = nn.UpsamplingBilinear2d(scale_factor=2)
         self.downscale_factor = scale_factor
-        self.out_channels = out_channels
 
-    def forward(self, x, skip, lateral_map):
-        # x = self.iaff(x, skip)
-        x = torch.cat((x, skip), dim=1)
-        x = self.proj(x)
+    def forward(self, x, lateral_map):
         x = self.up(x)
         ra_crop = F.interpolate(lateral_map, scale_factor=self.downscale_factor, mode='bilinear', align_corners=True)
         ra_sigmoid = -1 * torch.sigmoid(ra_crop) + 1
-        ra_sigmoid = ra_sigmoid.expand(-1, self.out_channels, -1, -1)
+        ra_sigmoid = ra_sigmoid.expand(-1, x.size()[1], -1, -1)
         x = ra_sigmoid.mul(x)
         return x, ra_crop
 
@@ -510,7 +491,6 @@ class Decoder(nn.Module):
         )
 
         decoder_channels = config.decoder_channels
-        in_channels = [self.config.inter_channel] + list(decoder_channels)[1:]
         out_channels = decoder_channels[1:]
 
         self.proj = Conv2dRelu(config.hidden_size, 32, kernel_size=1, padding=0, stride=1)
@@ -518,10 +498,6 @@ class Decoder(nn.Module):
             RFB_modified(in_ch, 32)
             for in_ch in config.rfb_channels
         ])
-        # self.rfbs = nn.ModuleList([
-        #     RFB_modified(in_ch, 32)
-        #     for in_ch in [config.hidden_size] + config.rfb_channels
-        # ])
 
         self.aggregation = nn.Sequential(
             IDA(node_kernel=3, out_dim=32, channels=[32, 32, 32, 32], up_factors=[4, 4, 2, 1]),
@@ -529,8 +505,7 @@ class Decoder(nn.Module):
         )
 
         self.decoder_blocks = nn.ModuleList([
-            DecoderBlock(in_ch, out_ch, scale_factor) for in_ch, out_ch, scale_factor in
-            zip(in_channels, out_channels, self.config.downscale_factors)
+            DecoderBlock(scale_factor) for scale_factor in self.config.downscale_factors
         ])
 
         self.segmentation_blocks = nn.ModuleList([
@@ -545,10 +520,6 @@ class Decoder(nn.Module):
 
         x = x.permute(0, 2, 1)
         x = x.contiguous().view(B, hidden, h, w)
-        # rfb_features = [x] + features
-        # global_map = self.aggregation([
-        #     rfb(rfb_features[i]) for i, rfb in enumerate(self.rfbs)
-        # ])
         rfb_features = [x] + features
         rfb_features[0] = self.proj(rfb_features[0])
         for i, rfb in enumerate(self.rfbs, start=1):
@@ -556,10 +527,9 @@ class Decoder(nn.Module):
         global_map = self.aggregation(rfb_features)
         lateral_maps.append(global_map)
 
-        x = self.conv_inter(x)
         for i, (decoder_block, segmentation_block) in \
-                enumerate(zip(self.decoder_blocks, self.segmentation_blocks), start=1):
-            x, ra_crop = decoder_block(x, features[i - 1], lateral_maps[i - 1])
+                enumerate(zip(self.decoder_blocks, self.segmentation_blocks)):
+            x, ra_crop = decoder_block(features[i], lateral_maps[i])
             laterap_map = segmentation_block(x, ra_crop)
             lateral_maps.append(laterap_map)
         return lateral_maps

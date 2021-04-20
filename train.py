@@ -63,17 +63,16 @@ def train(opt, train_loader, model, optimizer, epoch, loss_fn):
         loss /= opt.accumulation_step
         # ---- backward ----
         loss.backward()
-        # clip_gradient(optimizer, opt.clip)
+        clip_gradient(optimizer, opt.clip)
         if i % opt.accumulation_step == 0:
             optimizer.step()
-            scheduler.step()
             optimizer.zero_grad()
         # ---- train visualization ----
         if i == 1 or i % 20 == 0 or i == len(train_loader):
             tbar.set_description('{} Epoch [{:03d}/{:03d}], Step [{:04d}/{:04d}], Train loss {:.04f}'.
                                  format(datetime.now(), epoch, opt.epoch, i, len(train_loader),
                                         np.mean(loss_record)))
-    save_path = 'outputs/{}/train'.format(opt.output_path)
+    save_path = 'outputs/{}/train/'.format(opt.output_path)
     os.makedirs(save_path, exist_ok=True)
     if epoch % 10 == 0:
         torch.save(model.state_dict(), save_path + 'TransInvNet-%d.pth' % epoch)
@@ -121,7 +120,7 @@ def test(opt, test_loader, model, epoch, loss_fn, best_loss, best_metrics):
     if current_loss < best_loss[-1] or metrics > best_metrics[-1]:
         best_loss.append(current_loss)
         best_metrics.append(metrics)
-        save_path = 'outputs/{}/train'.format(opt.output_path)
+        save_path = 'outputs/{}/train/'.format(opt.output_path)
         torch.save(model.state_dict(), save_path + 'TransInvNet-best.pth')
         print('[Saving model weight], current best test loss is {:.04f}, current best mean dice is {:.04f}, '
               'current best mean abs error is {:.04f}, current best mean iou is {:.04f}'
@@ -145,7 +144,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_path', type=str,
                         default='datasets/polyp-dataset/train', help='path to train dataset')
     parser.add_argument('--test_path', type=str,
-                        default='datasets/polyp-dataset/test', help='path to test dataset')
+                        default='datasets/polyp-dataset/kvasir/test', help='path to test dataset')
     parser.add_argument('--output_path', type=str,
                         default='exp{}'.format(datetime.now().strftime('%m%d%H%M')), help='path to output')
     parser.add_argument('--seed', type=int,
@@ -175,7 +174,7 @@ if __name__ == '__main__':
 
     params = model.parameters()
     optimizer = torch.optim.AdamW(params, opt.lr, weight_decay=1e-4)
-    scheduler = lr_scheduler.CosineAnnealingLR(optimizer, len(train_loader) // opt.accumulation_step)
+    scheduler = lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2)
 
     print("#" * 20, "Start Training", "#" * 20)
 
@@ -183,3 +182,5 @@ if __name__ == '__main__':
     for epoch in range(1, opt.epoch + 1):
         train(opt, train_loader, model, optimizer, epoch, loss_fn)
         test(opt, test_loader, model, epoch, loss_fn, best_loss, best_metrics)
+        print(scheduler.get_lr())
+        scheduler.step()
