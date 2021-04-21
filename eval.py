@@ -14,6 +14,8 @@ from TransInvNet.model.vit import VisionTransformer, CONFIGS
 
 class Metrics:
     def __init__(self, pred, mask):
+        self.h, self.w = mask.shape[0], mask.shape[1]
+        self.origin_pred, self.origin_mask = pred, mask
         self.pred, self.mask = pred.flatten(), mask.flatten()
         self.intersection = np.sum(self.pred * self.mask)
         self.mask_sum = np.sum(np.abs(self.pred)) + np.sum(np.abs(self.mask))
@@ -21,13 +23,13 @@ class Metrics:
         self.abs_error = np.abs(self.pred - self.mask)
 
     def calculate_iou(self):
-        return (self.intersection + 1e-8) / (self.union + 1e-8)
+        return (self.intersection + 1e-20) / (self.union + 1e-20)
 
     def calculate_mae(self):
         return np.mean(self.abs_error)
 
     def calculate_dice(self):
-        return (self.intersection * 2 + 1e-8) / (self.mask_sum + 1e-8)
+        return (self.intersection * 2 + 1e-20) / (self.mask_sum + 1e-20)
 
     def _S_object(self):
         fg = np.where(self.mask == 0, np.zeros_like(self.pred), self.pred)
@@ -42,8 +44,70 @@ class Metrics:
         temp = pred[mask == 1]
         x = np.mean(temp)
         sigma_x = np.std(temp)
-        score = 2.0 * x / (x * x + 1.0 + sigma_x + 1e-8)
+        score = 2.0 * x / (x * x + 1.0 + sigma_x + 1e-20)
         return score
+
+    def _S_region(self):
+        X, Y = self._centroid()
+        gt1, gt2, gt3, gt4, w1, w2, w3, w4 = self._divideGT(X, Y)
+        p1, p2, p3, p4 = self._dividePrediction(X, Y)
+        Q1 = self._ssim(p1, gt1)
+        Q2 = self._ssim(p2, gt2)
+        Q3 = self._ssim(p3, gt3)
+        Q4 = self._ssim(p4, gt4)
+        Q = w1 * Q1 + w2 * Q2 + w3 * Q3 + w4 * Q4
+        return Q
+
+    def _centroid(self):
+        if self.mask.sum() == 0:
+            X = np.eye(1) * round(self.w / 2)
+            Y = np.eye(1) * round(self.h / 2)
+        else:
+            total = self.mask.sum()
+            i = np.arange(0, self.w)
+            j = np.arange(0, self.h)
+            X = round((self.origin_mask.sum(axis=0) * i).sum() / total)
+            Y = round((self.origin_mask.sum(axis=1) * j).sum() / total)
+        return X, Y
+
+    def _divideGT(self, X, Y):
+        area = self.h * self.w
+        LT = self.origin_mask[:Y, :X]
+        RT = self.origin_mask[:Y, X:self.w]
+        LB = self.origin_mask[Y:self.h, :X]
+        RB = self.origin_mask[Y:self.h, X:self.w]
+
+        w1 = (X * Y) / area
+        w2 = (self.w - X) * Y / area
+        w3 = X * (self.h - Y) / area
+        w4 = 1 - w1 - w2 - w3
+        return LT, RT, LB, RB, w1, w2, w3, w4
+
+    def _dividePrediction(self, X, Y):
+        LT = self.origin_pred[:Y, :X]
+        RT = self.origin_pred[:Y, X:self.w]
+        LB = self.origin_pred[Y:self.h, :X]
+        RB = self.origin_pred[Y:self.h, X:self.w]
+        return LT, RT, LB, RB
+
+    def _ssim(self, pred, mask):
+        N = self.h * self.w
+        x = pred.mean()
+        y = mask.mean()
+        sigma_x2 = ((pred - x) * (pred - x)).sum() / (N - 1 + 1e-20)
+        sigma_y2 = ((mask - y) * (mask - y)).sum() / (N - 1 + 1e-20)
+        sigma_xy = ((pred - x) * (mask - y)).sum() / (N - 1 + 1e-20)
+
+        alpha = 4 * x * y * sigma_xy
+        beta = (x * x + y * y) * (sigma_x2 + sigma_y2)
+
+        if alpha != 0:
+            Q = alpha / (beta + 1e-20)
+        elif alpha == 0 and beta == 0:
+            Q = 1.0
+        else:
+            Q = 0
+        return Q
 
     def calculate_s_measure(self):
         mask_mean = np.mean(self.mask)
@@ -53,7 +117,7 @@ class Metrics:
         elif mask_mean == 1:
             Q = pred_mean
         else:
-            Q = np.maximum(0.5 * self._S_object() + (1 - 0.5) * self._S_object(), 0)
+            Q = np.maximum(0.5 * self._S_object() + (1 - 0.5) * self._S_region(), 0)
         return Q
 
     def _eval_e(self, num=255):
@@ -61,9 +125,9 @@ class Metrics:
         for i in range(num):
             fm = self.pred - np.mean(self.pred)
             gt = self.mask - np.mean(self.mask)
-            align_matrix = 2 * gt * fm / (gt * gt + fm * fm + 1e-8)
+            align_matrix = 2 * gt * fm / (gt * gt + fm * fm + 1e-20)
             enhanced = ((align_matrix + 1) * (align_matrix + 1)) / 4
-            score[i] = np.sum(enhanced) / (len(self.mask) - 1 + 1e-8)
+            score[i] = np.sum(enhanced) / (len(self.mask) - 1 + 1e-20)
         return np.max(score)
 
     def calculate_e_measure(self):
@@ -76,9 +140,9 @@ if __name__ == '__main__':
     parser.add_argument('--img_size', type=int,
                         default=352, help='training dataset size')
     parser.add_argument('--weight_path', type=str,
-                        default='outputs/exp04202127/train/trainTransInvNet-best.pth', help='path to the trained weight')
+                        default='outputs/exp04190514/train/TransInvNet-best.pth', help='path to the trained weight')
     parser.add_argument('--test_path', type=str,
-                        default='datasets/polyp-dataset/kvasir/test', help='path to test dataset')
+                        default='datasets/polyp-dataset/endoscene', help='path to test dataset')
     opt = parser.parse_args()
 
     cfg = CONFIGS['R50-ViT-B_16']
@@ -107,7 +171,7 @@ if __name__ == '__main__':
             _, _, _, pred = model(img)
             pred = F.interpolate(pred, size=gt.shape, mode='bilinear', align_corners=True)
             result = pred.sigmoid().cpu().numpy().squeeze()
-            result = (result - result.min()) / (result.max() - result.min() + 1e-8)
+            result = (result - result.min()) / (result.max() - result.min() + 1e-20)
 
             metrics = Metrics(result, gt)
             iou = metrics.calculate_iou()
@@ -121,7 +185,15 @@ if __name__ == '__main__':
             Smeasure.append(s_measure)
             Emeasure.append(e_measure)
 
-            tbar.set_description('Mean IOU: {:.4f}, Average MAE: {:.4f}, Mean DICE: {:.4f}, '
-                                 'S Measure {:.4f}, E Measure {:.4f}'
+            tbar.set_description('mIOU: {:.4f}, Average MAE: {:.4f}, Mean DICE: {:.4f}, '
+                                 'S-Measure {:.4f}, MAX E-Measure {:.4f}'
                                  .format(np.mean(Miou), np.mean(Amae), np.mean(Mdice), np.mean(Smeasure),
                                          np.mean(Emeasure)))
+
+'''
+Dataset   |  mIOU  | Average MAE | Mean DICE | S-Measure | Max E-Measure |
+Kvasi-SEG | 0.844  |   0.030     |   0.901   |   0.913   |     0.952     |
+ETIS      | 0.601  |   0.042     |   0.682   |   0.803   |     0.839     |
+CVC-612   | 0.889  |   0.014     |   0.935   |   0.944   |     0.977     |
+Endoscene | 0.754  |   0.018     |   0.841   |   0.890   |     0.938     |
+'''

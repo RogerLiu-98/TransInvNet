@@ -182,5 +182,4 @@ if __name__ == '__main__':
     for epoch in range(1, opt.epoch + 1):
         train(opt, train_loader, model, optimizer, epoch, loss_fn)
         test(opt, test_loader, model, epoch, loss_fn, best_loss, best_metrics)
-        print(scheduler.get_lr())
         scheduler.step()
