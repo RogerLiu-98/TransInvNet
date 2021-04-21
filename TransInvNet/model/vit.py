@@ -396,69 +396,24 @@ class Transformer(nn.Module):
         return encoded, attn_weights, features
 
 
-class MSCAM(nn.Module):
-
-    def __init__(self, in_channels, r=4):
-        super(MSCAM, self).__init__()
-        inter_channels = in_channels // r
-        self.local_att = nn.Sequential(
-            Conv2dRelu(in_channels, inter_channels, kernel_size=1, padding=0, stride=1),
-            nn.Conv2d(inter_channels, in_channels, kernel_size=1, padding=0, stride=1),
-            nn.BatchNorm2d(in_channels)
-        )
-
-        self.global_att = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            Conv2dRelu(in_channels, inter_channels, kernel_size=1, padding=0, stride=1, bias=True),
-            nn.Conv2d(inter_channels, in_channels, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm2d(in_channels)
-        )
-
-    def forward(self, x):
-        xl = self.local_att(x)
-        xg = self.global_att(x)
-        xlg = xl + xg
-        wei = torch.sigmoid(xlg)
-        return wei
-
-
-class iAFF(nn.Module):
-
-    def __init__(self, in_channels, out_channels, r=4):
-        super(iAFF, self).__init__()
-        self.ms_cam1 = MSCAM(in_channels, r)
-        self.ms_cam2 = MSCAM(in_channels, r)
-        self.proj = nn.Sequential(
-            Inv2dRelu(in_channels, kernel_size=7, stride=1),
-            Conv2dRelu(in_channels, out_channels, kernel_size=1, padding=0, stride=1, bias=True),
-        )
-
-    def forward(self, x, y):
-        x1 = x + y
-        x1l = self.ms_cam1(x1)
-        x1r = 1 - x1l
-        x2 = x * x1l + y * x1r
-
-        x2l = self.ms_cam2(x2)
-        x2r = 1 - x2l
-        z = x * x2l + y * x2r
-
-        z = self.proj(z)
-        return z
-
-
 class DecoderBlock(nn.Module):
-    def __init__(self, scale_factor):
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 scale_factor=1 / 8):
         super(DecoderBlock, self).__init__()
-        # self.iaff = iAFF(in_channels, out_channels, r=4)
+        self.proj = Conv2dRelu(in_channels * 2, out_channels, kernel_size=1, padding=0, stride=1)
         self.up = nn.UpsamplingBilinear2d(scale_factor=2)
         self.downscale_factor = scale_factor
+        self.out_channels = out_channels
 
-    def forward(self, x, lateral_map):
+    def forward(self, x, skip, lateral_map):
+        x = torch.cat((x, skip), dim=1)
+        x = self.proj(x)
         x = self.up(x)
         ra_crop = F.interpolate(lateral_map, scale_factor=self.downscale_factor, mode='bilinear', align_corners=True)
         ra_sigmoid = -1 * torch.sigmoid(ra_crop) + 1
-        ra_sigmoid = ra_sigmoid.expand(-1, x.size()[1], -1, -1)
+        ra_sigmoid = ra_sigmoid.expand(-1, self.out_channels, -1, -1)
         x = ra_sigmoid.mul(x)
         return x, ra_crop
 
@@ -491,6 +446,7 @@ class Decoder(nn.Module):
         )
 
         decoder_channels = config.decoder_channels
+        in_channels = [self.config.inter_channel] + list(decoder_channels)[1:]
         out_channels = decoder_channels[1:]
 
         self.proj = Conv2dRelu(config.hidden_size, 32, kernel_size=1, padding=0, stride=1)
@@ -505,7 +461,8 @@ class Decoder(nn.Module):
         )
 
         self.decoder_blocks = nn.ModuleList([
-            DecoderBlock(scale_factor) for scale_factor in self.config.downscale_factors
+            DecoderBlock(in_ch, out_ch, scale_factor) for in_ch, out_ch, scale_factor in
+            zip(in_channels, out_channels, self.config.downscale_factors)
         ])
 
         self.segmentation_blocks = nn.ModuleList([
@@ -520,6 +477,7 @@ class Decoder(nn.Module):
 
         x = x.permute(0, 2, 1)
         x = x.contiguous().view(B, hidden, h, w)
+
         rfb_features = [x] + features
         rfb_features[0] = self.proj(rfb_features[0])
         for i, rfb in enumerate(self.rfbs, start=1):
@@ -527,9 +485,10 @@ class Decoder(nn.Module):
         global_map = self.aggregation(rfb_features)
         lateral_maps.append(global_map)
 
+        x = self.conv_inter(x)
         for i, (decoder_block, segmentation_block) in \
-                enumerate(zip(self.decoder_blocks, self.segmentation_blocks)):
-            x, ra_crop = decoder_block(features[i], lateral_maps[i])
+                enumerate(zip(self.decoder_blocks, self.segmentation_blocks), start=1):
+            x, ra_crop = decoder_block(x, features[i - 1], lateral_maps[i - 1])
             laterap_map = segmentation_block(x, ra_crop)
             lateral_maps.append(laterap_map)
         return lateral_maps
@@ -607,12 +566,3 @@ CONFIGS = {
     'R50-ViT-L_16': configs.get_r50_l16_config(),
     'testing': configs.get_testing(),
 }
-
-if __name__ == '__main__':
-    config = configs.get_r50_b16_config()
-    model = VisionTransformer(config, img_size=256, vis=True).cuda()
-    model.load_from(np.load(config.pretrained_path))
-    im = torch.randn((4, 3, 256, 256)).cuda()
-    x4, x3, x2, x1 = model(im)
-    print(x1.size(), x2.size(), x3.size(), x4.size())
-    # print(model)
