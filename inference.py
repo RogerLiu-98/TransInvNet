@@ -6,10 +6,11 @@ import albumentations as A
 import numpy as np
 import torch
 import torch.nn.functional as F
-from Model.model.vit import VisionTransformer, CONFIGS
+from TransInvNet.model.vit import VisionTransformer, CONFIGS
 from PIL import Image
 from albumentations.pytorch.transforms import ToTensorV2
 from tqdm import tqdm
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -45,12 +46,12 @@ if __name__ == '__main__':
         for img in tbar:
             file_name = img.name
             im = Image.open(img).convert('RGB')
-            h, w = im.size
+            w, h = im.size
             im = im.resize((opt.img_size, opt.img_size))
             img = np.array(im)
             img = trans(image=img)['image'][None]
             img = img.cuda()
-            _, _, _, pred = model(img)
+            _, _, pred, _ = model(img)
             pred = F.interpolate(pred, size=(h, w), mode='bilinear', align_corners=True)
             result = pred.sigmoid().cpu().numpy().squeeze()
             result[result >= 0.5] = 1
