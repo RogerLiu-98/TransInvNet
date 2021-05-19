@@ -1,15 +1,16 @@
 import argparse
 import pathlib
 
-import albumentations as A
-import numpy as np
 import torch
 import torch.nn.functional as F
-from PIL import Image
-from albumentations.pytorch.transforms import ToTensorV2
-from tqdm import tqdm
 
-from TransInvNet.model.vit import VisionTransformer, CONFIGS
+import numpy as np
+from PIL import Image
+from tqdm import tqdm
+import albumentations as A
+from albumentations.pytorch.transforms import ToTensorV2
+
+from TransInvNet.model.model import TransInvNet, CONFIGS
 
 
 class Metrics:
@@ -140,13 +141,14 @@ if __name__ == '__main__':
     parser.add_argument('--img_size', type=int,
                         default=352, help='training dataset size')
     parser.add_argument('--weight_path', type=str,
-                        default='outputs/exp04190514/train/TransInvNet-best.pth', help='path to the trained weight')
+                        default='outputs/exp05170318/train/TransInvNet-best.pth', help='path to the trained weight')
     parser.add_argument('--test_path', type=str,
-                        default='datasets/polyp-dataset/endoscene', help='path to test dataset')
+                        default='datasets/polyp-dataset/kvasir/test', help='path to test dataset')
     opt = parser.parse_args()
 
     cfg = CONFIGS['R50-ViT-B_16']
-    model = VisionTransformer(cfg, opt.img_size, vis=True).cuda()
+
+    model = TransInvNet(cfg, opt.img_size, vis=True).cuda()
     model.load_state_dict(torch.load(opt.weight_path))
     model.eval()
 
@@ -171,7 +173,7 @@ if __name__ == '__main__':
             _, _, _, pred = model(img)
             pred = F.interpolate(pred, size=gt.shape, mode='bilinear', align_corners=True)
             result = pred.sigmoid().cpu().numpy().squeeze()
-            result = (result - result.min()) / (result.max() - result.min() + 1e-20)
+            result = (result - result.min() + 1e-20) / (result.max() - result.min() + 1e-20)
 
             metrics = Metrics(result, gt)
             iou = metrics.calculate_iou()
@@ -193,7 +195,7 @@ if __name__ == '__main__':
 '''
 Dataset   |  mIOU  | Average MAE | Mean DICE | S-Measure | Max E-Measure |
 Kvasi-SEG | 0.844  |   0.030     |   0.901   |   0.913   |     0.952     |
-ETIS      | 0.601  |   0.042     |   0.682   |   0.803   |     0.839     |
 CVC-612   | 0.889  |   0.014     |   0.935   |   0.944   |     0.977     |
+ETIS      | 0.601  |   0.042     |   0.682   |   0.803   |     0.839     |
 Endoscene | 0.754  |   0.018     |   0.841   |   0.890   |     0.938     |
 '''

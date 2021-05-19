@@ -9,8 +9,8 @@ from mmcv.cnn import (ConvModule, build_conv_layer, build_norm_layer,
                       constant_init, kaiming_init)
 from mmcv.utils.parrots_wrapper import _BatchNorm
 
-from TransInvNet.builder import BACKBONES
-from TransInvNet.model.base_backbone import BaseBackbone
+from TransInvNet.model.backbone.builder import BACKBONES
+from TransInvNet.model.backbone.base_backbone import BaseBackbone
 from TransInvNet.utils.involution_cuda import involution
 
 

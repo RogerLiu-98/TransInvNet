@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 class PolypDataset(data.Dataset):
 
-    def __init__(self, dataset_dir='', image_dir='', mask_dir='', new_size=(312, 312)):
+    def __init__(self, dataset_dir='', image_dir='', mask_dir='', new_size=(352, 352)):
         super(PolypDataset, self).__init__()
         self.dataset_dir = pathlib.Path(dataset_dir)
         self.image_dir = image_dir
@@ -28,7 +28,7 @@ class PolypDataset(data.Dataset):
     def load_images(self):
         image_files = [i for i in (self.dataset_dir / self.image_dir).iterdir()]
         mask_files = [i for i in (self.dataset_dir / self.mask_dir).iterdir()]
-        assert len(image_files) == len(mask_files), 'The total number of images and masks should be the same!'
+        assert len(image_files) == len(mask_files), 'The number of images does not match the number masks!'
 
         tbar = tqdm(zip(image_files, mask_files), total=len(image_files), desc='\r')
         for i, pack in enumerate(tbar, start=1):

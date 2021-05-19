@@ -6,11 +6,12 @@ import albumentations as A
 import numpy as np
 import torch
 import torch.nn.functional as F
-from TransInvNet.model.vit import VisionTransformer, CONFIGS
+
 from PIL import Image
 from albumentations.pytorch.transforms import ToTensorV2
 from tqdm import tqdm
 
+from TransInvNet.model.model import TransInvNet, CONFIGS
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -27,7 +28,7 @@ if __name__ == '__main__':
     opt = parser.parse_args()
 
     cfg = CONFIGS['R50-ViT-B_16']
-    model = VisionTransformer(cfg, opt.img_size, vis=True).cuda()
+    model = TransInvNet(cfg, opt.img_size, vis=True).cuda()
     model.load_state_dict(torch.load(opt.weight_path))
     model.eval()
 

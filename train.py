@@ -7,12 +7,11 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.utils.data as D
-from torch.optim import lr_scheduler
 from tqdm import tqdm
 
-from TransInvNet.model.vit import VisionTransformer, CONFIGS
+from TransInvNet.model.model import TransInvNet, CONFIGS
 from TransInvNet.utils.dataloader import PolypDataset
-from TransInvNet.utils.utils import clip_gradient
+from TransInvNet.utils.utils import clip_gradient, adjust_lr
 from eval import Metrics
 
 
@@ -50,13 +49,9 @@ def train(opt, train_loader, model, optimizer, epoch, loss_fn):
         images = images.cuda()
         gts = gts.float().cuda()
         # ---- forward ----
-        lateral_map4, lateral_map3, lateral_map2, lateral_map1 = model(images)
+        out = model(images)
         # ---- compute loss ----
-        loss1 = loss_fn(lateral_map1, gts)
-        loss2 = loss_fn(lateral_map2, gts)
-        loss3 = loss_fn(lateral_map3, gts)
-        loss4 = loss_fn(lateral_map4, gts)
-        loss = 0.4 * loss1 + 0.3 * loss2 + 0.2 * loss3 + 0.1 * loss4
+        loss = loss_fn(out, gts)
         # ---- record loss ----
         loss_record.append(float(loss.data))
         # ---- gradient accumulation ----
@@ -91,15 +86,11 @@ def test(opt, test_loader, model, epoch, loss_fn, best_loss, best_metrics):
             images = images.cuda()
             gts = gts.cuda()
             # ---- forward ----
-            lateral_map4, lateral_map3, lateral_map2, lateral_map1 = model(images)
+            out = model(images)
             # ---- compute loss ----
-            loss1 = loss_fn(lateral_map1, gts)
-            loss2 = loss_fn(lateral_map2, gts)
-            loss3 = loss_fn(lateral_map3, gts)
-            loss4 = loss_fn(lateral_map4, gts)
-            loss = 0.4 * loss1 + 0.3 * loss2 + 0.2 * loss3 + 0.1 * loss4
+            loss = loss_fn(out, gts)
             # --- compute metric ----
-            pred = lateral_map1.sigmoid().cpu().numpy().squeeze()
+            pred = out.sigmoid().cpu().numpy().squeeze()
             pred = (pred - pred.min()) / (pred.max() - pred.min() + 1e-8)
             mask = gts.cpu().numpy().squeeze()
             metrics = Metrics(pred, mask)
@@ -130,9 +121,9 @@ def test(opt, test_loader, model, epoch, loss_fn, best_loss, best_metrics):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int,
-                        default=100, help='epoch number')
+                        default=30, help='epoch number')
     parser.add_argument('--lr', type=float,
-                        default=1e-4, help='learning rate')
+                        default=5e-3, help='learning rate')
     parser.add_argument('--batch_size', type=int,
                         default=4, help='training batch size')
     parser.add_argument('--accumulation_step', type=int,
@@ -140,7 +131,7 @@ if __name__ == '__main__':
     parser.add_argument('--img_size', type=int,
                         default=352, help='training dataset size')
     parser.add_argument('--clip', type=float,
-                        default=0.5, help='gradient clipping margin')
+                        default=0.6, help='gradient clipping margin')
     parser.add_argument('--train_path', type=str,
                         default='datasets/polyp-dataset/train', help='path to train dataset')
     parser.add_argument('--test_path', type=str,
@@ -164,7 +155,7 @@ if __name__ == '__main__':
     # ---- build models ----
     torch.cuda.set_device(0)  # set your gpu device
     cfg = CONFIGS['R50-ViT-B_16']
-    model = VisionTransformer(cfg, opt.img_size, vis=True).cuda()
+    model = TransInvNet(cfg, opt.img_size, vis=True).cuda()
     model.load_from(np.load(cfg.pretrained_path))
 
     # ---- flops and params ----
@@ -172,14 +163,17 @@ if __name__ == '__main__':
     # x = torch.randn(1, 3, 352, 352).cuda()
     # CalParams(model, x)
 
-    params = model.parameters()
-    optimizer = torch.optim.AdamW(params, opt.lr, weight_decay=1e-4)
-    scheduler = lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2)
+    vit_params = model.transformer.parameters()
+    decoder_params = model.decoder.parameters()
+    optimizer = torch.optim.AdamW([
+        {"params": vit_params},
+        {"params": decoder_params},
+    ], opt.lr, weight_decay=1e-4)
 
     print("#" * 20, "Start Training", "#" * 20)
 
     best_loss, best_metrics = [np.inf], [-np.inf]
     for epoch in range(1, opt.epoch + 1):
+        adjust_lr(optimizer, epoch, opt.epoch, 0.9)
         train(opt, train_loader, model, optimizer, epoch, loss_fn)
         test(opt, test_loader, model, epoch, loss_fn, best_loss, best_metrics)
-        scheduler.step()
