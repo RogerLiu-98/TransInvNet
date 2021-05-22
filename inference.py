@@ -18,16 +18,16 @@ if __name__ == '__main__':
     parser.add_argument('--img_size', type=int,
                         default=352, help='training dataset size')
     parser.add_argument('--weight_path', type=str,
-                        default='outputs/exp04190514/train/TransInvNet-best.pth', help='path to the trained weight')
+                        default='outputs/exp05200532/train/TransInvNet-best.pth', help='path to the trained weight')
     parser.add_argument('--test_path', type=str,
                         default='datasets/polyp-dataset/kvasir/test', help='path to test dataset')
     parser.add_argument('--output_path', type=str,
-                        default='outputs/exp04190514/inference', help='path to output path')
+                        default='outputs/exp05200532/inference', help='path to output path')
     parser.add_argument('--threshold', type=int,
                         default=0.5, help='sigmoid threshold')
     opt = parser.parse_args()
 
-    cfg = CONFIGS['R50-ViT-B_16']
+    cfg = CONFIGS['ViT-B_16']
     model = TransInvNet(cfg, opt.img_size, vis=True).cuda()
     model.load_state_dict(torch.load(opt.weight_path))
     model.eval()
@@ -52,7 +52,7 @@ if __name__ == '__main__':
             img = np.array(im)
             img = trans(image=img)['image'][None]
             img = img.cuda()
-            _, _, pred, _ = model(img)
+            pred = model(img)
             pred = F.interpolate(pred, size=(h, w), mode='bilinear', align_corners=True)
             result = pred.sigmoid().cpu().numpy().squeeze()
             result[result >= 0.5] = 1

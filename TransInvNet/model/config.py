@@ -3,6 +3,7 @@ import ml_collections
 
 def get_b16_config():
     """Returns the ViT-B/16 configuration."""
+    # -------- Configs for Transformer --------
     config = ml_collections.ConfigDict()
     config.patches = ml_collections.ConfigDict({'size': (16, 16)})
     config.hidden_size = 768
@@ -12,41 +13,89 @@ def get_b16_config():
     config.transformer.num_layers = 12
     config.transformer.attention_dropout_rate = 0.0
     config.transformer.dropout_rate = 0.1
+    config.transformer.inter_channel = 1024
 
     config.classifier = 'seg'
-    config.representation_size = None
-    config.resnet_pretrained_path = None
-    config.pretrained_path = '../model/vit_checkpoint/imagenet21k/ViT-B_16.npz'
+    config.pretrained_path = 'TransInvNet/lib/imagenet21k_ViT-B_16.npz'
     config.patch_size = 16
-
-    config.decoder_channels = (256, 128, 64, 16)
     config.n_classes = 1
+
+    # -------- Configs for RedNet --------
+    config.rednet = ml_collections.ConfigDict()
+    config.rednet.depth = 50
+    config.rednet.stages = 4
+    config.rednet.strides = (1, 2, 2, 2)
+    config.rednet.dilations = (1, 1, 1, 1)
+    config.rednet.out_indices = (0, 1, 2, 3)
+    config.rednet.out_dimensions = (2048, 1024, 512, 256)
+    config.rednet.aspp_rates = [1, 6, 12]
+
+    config.rednet.pretrained_path = 'TransInvNet/lib/rednet50.pth'
+
+    # -------- Configs for Decoder --------
+    config.decoder = ml_collections.ConfigDict()
+    config.decoder.segmentation_channels = 256
+    config.decoder.up_scale_factors = 2
+
     return config
 
 
-def get_r50_b16_config():
-    """Returns the Rednet50 + ViT-B/16 configuration."""
+def get_b32_config():
+    """Returns the ViT-B/32 configuration."""
     config = get_b16_config()
-    config.patches.grid = (16, 16)
+    config.patches.size = (32, 32)
+    config.pretrained_path = 'TransInvNet/lib/imagenet21k_ViT-B_32.npz'
+    return config
 
-    config.rednet = ml_collections.ConfigDict()
-    config.rednet.depth = 50
-    config.rednet.num_stages = 4
-    config.rednet.strides = (1, 2, 2, 2)
-    config.rednet.dilations = (1, 1, 1, 1)
-    config.rednet.base_channels = 64
-    config.rednet.out_indices = (1, 2, 3)
-    config.rednet.out_channels = [2048, 1024, 512]
-    config.rednet.pretrained_path = ('TransInvNet/lib/rednet50-1c7a7c5d.pth')
+
+def get_b8_config():
+    """Returns the ViT-B/8 configuration."""
+    config = get_b16_config()
+    config.patches.size = (8, 8)
+    config.pretrained_path = 'TransInvNet/lib/imagenet21k_ViT-B_8.npz'
+    return config
+
+
+def get_l16_config():
+    """Returns the ViT-L/16 configuration."""
+    config = ml_collections.ConfigDict()
+    config.patches = ml_collections.ConfigDict({'size': (16, 16)})
+    config.hidden_size = 1024
+    config.transformer = ml_collections.ConfigDict()
+    config.transformer.mlp_dim = 4096
+    config.transformer.num_heads = 16
+    config.transformer.num_layers = 24
+    config.transformer.attention_dropout_rate = 0.0
+    config.transformer.dropout_rate = 0.1
+    config.transformer.inter_channel = None
 
     config.classifier = 'seg'
-    config.pretrained_path = 'TransInvNet/lib/imagenet21k+imagenet2012_R50+ViT-B_16.npz'
-    config.inter_channel = 1024
-    config.decoder_channels = (768, 512, 256, 64)
-    config.rfb_channels = [768, 1024, 512, 256]
-    config.rfb_upsample_factors = [4, 4, 2, 1]
-    config.scale_factors = [4, 16, 8, 4]
-    config.downscale_factors = [1 / 16, 1 / 8, 1 / 4]
+    config.pretrained_path = 'TransInvNet/lib/imagenet21k_ViT-L_16.npz'
     config.n_classes = 1
 
+    # -------- Configs for RedNet --------
+    config.rednet = ml_collections.ConfigDict()
+    config.rednet.depth = 50
+    config.rednet.stages = 4
+    config.rednet.strides = (1, 2, 2, 2)
+    config.rednet.dilations = (1, 1, 1, 1)
+    config.rednet.out_indices = (0, 1, 2, 3)
+    config.rednet.out_dimensions = (2048, 1024, 512, 256)
+    config.rednet.aspp_rates = [1, 6, 12]
+
+    config.rednet.pretrained_path = 'TransInvNet/lib/rednet50.pth'
+
+    # -------- Configs for Decoder --------
+    config.decoder = ml_collections.ConfigDict()
+    config.decoder.segmentation_channels = 256
+    config.decoder.up_scale_factors = 2
+
+    return config
+
+
+def get_l32_config():
+    """Returns the ViT-L/32 configuration."""
+    config = get_l16_config()
+    config.patches.size = (32, 32)
+    config.pretrained_path = 'TransInvNet/lib/imagenet21k_ViT-L_32.npz'
     return config

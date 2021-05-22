@@ -3,15 +3,16 @@ import logging
 import math
 from os.path import join as pjoin
 
+import numpy as np
+from scipy import ndimage
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Dropout, Softmax, Linear, Conv2d, LayerNorm
 from torch.nn.modules.utils import _pair
 
-from TransInvNet.model.backbone.rednet import RedNet
 from TransInvNet.utils.utils import np2th, swish
-from TransInvNet.model.basic_blocks import Conv2dRelu, Inv2dRelu
 
 logger = logging.getLogger(__name__)
 
@@ -106,33 +107,12 @@ class Embeddings(nn.Module):
 
     def __init__(self, config, img_size, in_channels=3):
         super(Embeddings, self).__init__()
-        self.hybrid = None
         self.config = config
         img_size = _pair(img_size)
 
-        if config.patches.get("grid") is not None:  # Have backbone network
-            grid_size = config.patches["grid"]
-            patch_size = (img_size[0] // 16 // grid_size[0], img_size[1] // 16 // grid_size[1])
-            patch_size_real = (patch_size[0] * 16, patch_size[1] * 16)
-            n_patches = (img_size[0] // patch_size_real[0]) * (img_size[1] // patch_size_real[1])
-            self.hybrid = True
-        else:
-            patch_size = _pair(config.patches["size"])
-            n_patches = (img_size[0] // patch_size[0]) * (img_size[1] // patch_size[1])
-            self.hybrid = False
-        if self.hybrid:
-            self.hybrid_model = RedNet(depth=config.rednet.depth, num_stages=config.rednet.num_stages,
-                                       strides=config.rednet.strides,
-                                       dilations=config.rednet.dilations,
-                                       base_channels=config.rednet.base_channels,
-                                       out_indices=config.rednet.out_indices)
-            in_channels = self.hybrid_model.base_channels * 16
-            self.projs = nn.ModuleList([nn.Sequential(
-                Conv2dRelu(in_ch, in_ch // 2, kernel_size=3, stride=1, padding=1),
-                Conv2dRelu(in_ch // 2, in_ch // 2, kernel_size=1, stride=1, padding=0),
-                nn.UpsamplingBilinear2d(scale_factor=2))
-                for in_ch in config.rednet.out_channels
-            ])
+        patch_size = _pair(config.patches["size"])
+        n_patches = (img_size[0] // patch_size[0]) * (img_size[1] // patch_size[1])
+
         self.patch_embeddings = Conv2d(in_channels=in_channels,
                                        out_channels=config.hidden_size,
                                        kernel_size=patch_size,
@@ -141,19 +121,12 @@ class Embeddings(nn.Module):
         self.dropout = Dropout(config.transformer["dropout_rate"])
 
     def forward(self, x):
-        if self.hybrid:
-            features = self.hybrid_model(x)
-            for i, proj in enumerate(self.projs):
-                features[i] = proj(features[i])
-                x = features[0]
-        else:
-            features = None
         x = self.patch_embeddings(x)  # (B, hidden, n_patches^(1/2), n_patches^(1/2))
         x = x.flatten(start_dim=2)
         x = x.transpose(-1, -2)  # (B, n_patches, hidden)
         embeddings = x + self.position_embeddings
         embeddings = self.dropout(embeddings)
-        return embeddings, features
+        return embeddings
 
 
 class Block(nn.Module):
@@ -235,16 +208,60 @@ class Encoder(nn.Module):
             if self.vis:
                 attn_weights.append(weights)
         encoded = self.encoder_norm(hidden_states)
-        return encoded, attn_weights
+        return encoded
 
 
 class Transformer(nn.Module):
     def __init__(self, config, img_size, vis):
         super(Transformer, self).__init__()
-        self.embeddings = Embeddings(config, img_size=img_size)
-        self.encoder = Encoder(config, vis)
+        self.classifier = config.classifier
+        self.transformer = nn.ModuleDict({
+            "embeddings": Embeddings(config, img_size=img_size),
+            "encoder": Encoder(config, vis)
+        })
 
     def forward(self, input_ids):
-        embedding_output, features = self.embeddings(input_ids)
-        encoded, attn_weights = self.encoder(embedding_output)  # (B, n_patch, hidden)
-        return encoded, attn_weights, features
+        embedding_output = self.transformer["embeddings"](input_ids)
+        encoded = self.transformer["encoder"](embedding_output)  # (B, n_patch, hidden)
+        B, n_patch, hidden = encoded.size()
+        h, w = int(np.sqrt(n_patch)), int(np.sqrt(n_patch))
+        encoded = encoded.permute(0, 2, 1)
+        encoded = encoded.contiguous().view(B, hidden, h, w)
+        return encoded
+
+    def load_from(self, weights):
+        with torch.no_grad():
+
+            self.transformer.embeddings.patch_embeddings.weight.copy_(np2th(weights["embedding/kernel"], conv=True))
+            self.transformer.embeddings.patch_embeddings.bias.copy_(np2th(weights["embedding/bias"]))
+
+            self.transformer.encoder.encoder_norm.weight.copy_(np2th(weights["Transformer/encoder_norm/scale"]))
+            self.transformer.encoder.encoder_norm.bias.copy_(np2th(weights["Transformer/encoder_norm/bias"]))
+
+            posemb = np2th(weights["Transformer/posembed_input/pos_embedding"])
+
+            posemb_new = self.transformer.embeddings.position_embeddings
+            if posemb.size() == posemb_new.size():
+                self.transformer.embeddings.position_embeddings.copy_(posemb)
+            elif posemb.size()[1] - 1 == posemb_new.size()[1]:
+                posemb = posemb[:, 1:]
+                self.transformer.embeddings.position_embeddings.copy_(posemb)
+            else:
+                logger.info("load_pretrained: resized variant: %s to %s" % (posemb.size(), posemb_new.size()))
+                ntok_new = posemb_new.size(1)
+                if self.classifier == "seg":
+                    _, posemb_grid = posemb[:, :1], posemb[0, 1:]
+                gs_old = int(np.sqrt(len(posemb_grid)))
+                gs_new = int(np.sqrt(ntok_new))
+                print('load_pretrained: grid-size from %s to %s' % (gs_old, gs_new))
+                posemb_grid = posemb_grid.reshape(gs_old, gs_old, -1)
+                zoom = (gs_new / gs_old, gs_new / gs_old, 1)
+                posemb_grid = ndimage.zoom(posemb_grid, zoom, order=1)  # th2np
+                posemb_grid = posemb_grid.reshape(1, gs_new * gs_new, -1)
+                posemb = posemb_grid
+                self.transformer.embeddings.position_embeddings.copy_(np2th(posemb))
+
+            # Encoder whole
+            for bname, block in self.transformer.encoder.named_children():
+                for uname, unit in block.named_children():
+                    unit.load_from(weights, n_block=uname)

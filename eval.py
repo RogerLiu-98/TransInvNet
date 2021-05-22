@@ -141,13 +141,13 @@ if __name__ == '__main__':
     parser.add_argument('--img_size', type=int,
                         default=352, help='training dataset size')
     parser.add_argument('--weight_path', type=str,
-                        default='outputs/exp05170318/train/TransInvNet-best.pth', help='path to the trained weight')
+                        default='outputs/exp05200532/train/TransInvNet-best.pth', help='path to the trained weight')
     parser.add_argument('--test_path', type=str,
-                        default='datasets/polyp-dataset/kvasir/test', help='path to test dataset')
+                        default='datasets/polyp-dataset/'
+                                'cvc-t', help='path to test dataset')
     opt = parser.parse_args()
 
-    cfg = CONFIGS['R50-ViT-B_16']
-
+    cfg = CONFIGS['ViT-B_16']
     model = TransInvNet(cfg, opt.img_size, vis=True).cuda()
     model.load_state_dict(torch.load(opt.weight_path))
     model.eval()
@@ -170,7 +170,7 @@ if __name__ == '__main__':
             img = trans(image=img)['image'][None]
             img = img.cuda()
             gt = np.asarray(Image.open(gt).convert('1')).astype(np.float)
-            _, _, _, pred = model(img)
+            pred = model(img)
             pred = F.interpolate(pred, size=gt.shape, mode='bilinear', align_corners=True)
             result = pred.sigmoid().cpu().numpy().squeeze()
             result = (result - result.min() + 1e-20) / (result.max() - result.min() + 1e-20)
@@ -194,8 +194,8 @@ if __name__ == '__main__':
 
 '''
 Dataset   |  mIOU  | Average MAE | Mean DICE | S-Measure | Max E-Measure |
-Kvasi-SEG | 0.844  |   0.030     |   0.901   |   0.913   |     0.952     |
-CVC-612   | 0.889  |   0.014     |   0.935   |   0.944   |     0.977     |
-ETIS      | 0.601  |   0.042     |   0.682   |   0.803   |     0.839     |
-Endoscene | 0.754  |   0.018     |   0.841   |   0.890   |     0.938     |
+Kvasi-SEG | 0.8473  |   0.0316     |   0.9057   |   0.9239   |     0.9466     |
+CVC-612   | 0.8830  |   0.0113     |   0.9344   |   0.9483   |     0.9801     |
+ETIS      | 0.5983  |   0.0176     |   0.6826   |   0.8160   |     0.8700     |
+Endoscene | 0.8146  |   0.0067     |   0.8899   |   0.9335   |     0.9647     |
 '''

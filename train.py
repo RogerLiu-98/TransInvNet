@@ -49,9 +49,9 @@ def train(opt, train_loader, model, optimizer, epoch, loss_fn):
         images = images.cuda()
         gts = gts.float().cuda()
         # ---- forward ----
-        out = model(images)
+        pred = model(images)
         # ---- compute loss ----
-        loss = loss_fn(out, gts)
+        loss = loss_fn(pred, gts)
         # ---- record loss ----
         loss_record.append(float(loss.data))
         # ---- gradient accumulation ----
@@ -86,11 +86,11 @@ def test(opt, test_loader, model, epoch, loss_fn, best_loss, best_metrics):
             images = images.cuda()
             gts = gts.cuda()
             # ---- forward ----
-            out = model(images)
+            pred = model(images)
             # ---- compute loss ----
-            loss = loss_fn(out, gts)
+            loss = loss_fn(pred, gts)
             # --- compute metric ----
-            pred = out.sigmoid().cpu().numpy().squeeze()
+            pred = pred.sigmoid().cpu().numpy().squeeze()
             pred = (pred - pred.min()) / (pred.max() - pred.min() + 1e-8)
             mask = gts.cpu().numpy().squeeze()
             metrics = Metrics(pred, mask)
@@ -123,7 +123,7 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=int,
                         default=30, help='epoch number')
     parser.add_argument('--lr', type=float,
-                        default=5e-3, help='learning rate')
+                        default=1e-4, help='learning rate')
     parser.add_argument('--batch_size', type=int,
                         default=4, help='training batch size')
     parser.add_argument('--accumulation_step', type=int,
@@ -131,11 +131,14 @@ if __name__ == '__main__':
     parser.add_argument('--img_size', type=int,
                         default=352, help='training dataset size')
     parser.add_argument('--clip', type=float,
-                        default=0.6, help='gradient clipping margin')
+                        default=0.5, help='gradient clipping margin')
+    parser.add_argument('--cfg', type=str,
+                        default='ViT-B_16', help='configs for model, choose from ViT-B_8, '
+                                                 'ViT-B_16, ViT-B_32, ViT-L_16, ViT-L_32')
     parser.add_argument('--train_path', type=str,
                         default='datasets/polyp-dataset/train', help='path to train dataset')
     parser.add_argument('--test_path', type=str,
-                        default='datasets/polyp-dataset/kvasir/test', help='path to test dataset')
+                        default='datasets/polyp-dataset/kvasir', help='path to test dataset')
     parser.add_argument('--output_path', type=str,
                         default='exp{}'.format(datetime.now().strftime('%m%d%H%M')), help='path to output')
     parser.add_argument('--seed', type=int,
@@ -154,21 +157,23 @@ if __name__ == '__main__':
 
     # ---- build models ----
     torch.cuda.set_device(0)  # set your gpu device
-    cfg = CONFIGS['R50-ViT-B_16']
-    model = TransInvNet(cfg, opt.img_size, vis=True).cuda()
-    model.load_from(np.load(cfg.pretrained_path))
+    cfg = CONFIGS[opt.cfg]
+    model = TransInvNet(cfg, opt.img_size, vis=True, pretrained=True).cuda()
 
     # ---- flops and params ----
     # from TransInvNet.utils.utils import CalParams
     # x = torch.randn(1, 3, 352, 352).cuda()
     # CalParams(model, x)
 
+    rednet_params = model.rednet.parameters()
     vit_params = model.transformer.parameters()
     decoder_params = model.decoder.parameters()
+
     optimizer = torch.optim.AdamW([
+        {"params": rednet_params},
         {"params": vit_params},
-        {"params": decoder_params},
-    ], opt.lr, weight_decay=1e-4)
+        {"params": decoder_params, "lr": opt.lr * 10},
+    ], opt.lr, weight_decay=5e-4)
 
     print("#" * 20, "Start Training", "#" * 20)
 
