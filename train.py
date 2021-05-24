@@ -133,7 +133,7 @@ if __name__ == '__main__':
     parser.add_argument('--clip', type=float,
                         default=0.5, help='gradient clipping margin')
     parser.add_argument('--cfg', type=str,
-                        default='ViT-B_16', help='configs for model, choose from ViT-B_8, '
+                        default='ViT-B_16', help='configs for our model, choose from ViT-B_8, '
                                                  'ViT-B_16, ViT-B_32, ViT-L_16, ViT-L_32')
     parser.add_argument('--train_path', type=str,
                         default='datasets/polyp-dataset/TrainDataset', help='path to train dataset')
