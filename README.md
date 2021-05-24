@@ -39,6 +39,27 @@ are used for testing.
 ![alt Figure5](images/qualitiveresult.png)
 <p align="center">Figure 3: Qualitative results of our proposed TransInvNet compared to PraNet and HarDNet-MSEG.</p>
 
+### 1.5 Directory Tree for TransInvNet
+```
+TransInvNet
+├── lib
+├── model
+│ ├── backbone
+│ │ ├── base_backbone.py
+│ │ ├── builder.py
+│ │ └── rednet.py
+│ ├── basic_blocks.py
+│ ├── config.py
+│ ├── decoder
+│ │ └── decoder.py
+│ ├── model.py
+│ └── vit
+│     └── vit.py
+└── utils
+    ├── dataloader.py
+    ├── involution_cuda.py
+    └── utils.py
+```
 ## 2. Installation & Usage
 In our experiments, all training/testing are conducted using [Pytorch](https://pytorch.org/) with a single RTX2080 Ti GPU.
 ### 2.1 Installation
