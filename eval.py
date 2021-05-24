@@ -141,10 +141,10 @@ if __name__ == '__main__':
     parser.add_argument('--img_size', type=int,
                         default=352, help='training dataset size')
     parser.add_argument('--weight_path', type=str,
-                        default='outputs/exp05200532/train/TransInvNet-best.pth', help='path to the trained weight')
+                        default='outputs/exp05240731/train/TransInvNet-best.pth', help='path to the trained weight')
     parser.add_argument('--test_path', type=str,
                         default='datasets/polyp-dataset/'
-                                'cvc-t', help='path to test dataset')
+                                'TestDataset/CVC-ColonDB', help='path to test dataset')
     opt = parser.parse_args()
 
     cfg = CONFIGS['ViT-B_16']
@@ -194,8 +194,9 @@ if __name__ == '__main__':
 
 '''
 Dataset   |  mIOU  | Average MAE | Mean DICE | S-Measure | Max E-Measure |
-Kvasi-SEG | 0.8473  |   0.0316     |   0.9057   |   0.9239   |     0.9466     |
-CVC-612   | 0.8830  |   0.0113     |   0.9344   |   0.9483   |     0.9801     |
-ETIS      | 0.5983  |   0.0176     |   0.6826   |   0.8160   |     0.8700     |
-Endoscene | 0.8146  |   0.0067     |   0.8899   |   0.9335   |     0.9647     |
+Kvasi-SEG | 0.8536  |   0.0269     |   0.9100   |   0.9165   |     0.9527     |
+CVC-612   | 0.8363  |   0.0149     |   0.8905   |   0.9223   |     0.9551     |
+ETIS      | 0.6036  |   0.0166     |   0.6840   |   0.8133   |     0.8576     |
+Endoscene | 0.8273  |   0.0059     |   0.8995   |   0.9335   |     0.9734     |
+CVC-Colon | 0.6967  |   0.0295     |   0.7831   |   0.8541   |     0.9007    |
 '''

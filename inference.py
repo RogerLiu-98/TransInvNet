@@ -18,11 +18,11 @@ if __name__ == '__main__':
     parser.add_argument('--img_size', type=int,
                         default=352, help='training dataset size')
     parser.add_argument('--weight_path', type=str,
-                        default='outputs/exp05200532/train/TransInvNet-best.pth', help='path to the trained weight')
+                        default='outputs/exp05232321/train/TransInvNet-best.pth', help='path to the trained weight')
     parser.add_argument('--test_path', type=str,
-                        default='datasets/polyp-dataset/kvasir/test', help='path to test dataset')
+                        default='datasets/polyp-dataset/TestDataset/Kvasir', help='path to test dataset')
     parser.add_argument('--output_path', type=str,
-                        default='outputs/exp05200532/inference', help='path to output path')
+                        default='outputs/exp05232321/inference', help='path to output path')
     parser.add_argument('--threshold', type=int,
                         default=0.5, help='sigmoid threshold')
     opt = parser.parse_args()

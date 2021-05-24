@@ -2,18 +2,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from TransInvNet.model.basic_blocks import Conv2dRelu, Inv2dRelu, ASPP, Ra
+from TransInvNet.model.basic_blocks import Conv2dRelu, Inv2dRelu, Ra
 
 
 class Decoder(nn.Module):
     def __init__(self, config):
         super(Decoder, self).__init__()
-        self.aspp = ASPP(config.rednet.out_dimensions[0], rates=config.rednet.aspp_rates)
+        self.aspp1 = Conv2dRelu(config.rednet.out_dimensions[0], config.rednet.out_dimensions[0] // 2, kernel_size=1, padding=0, stride=1)
         if config.transformer.inter_channel is not None:
-            self.conv_inter = Conv2dRelu(config.hidden_size, config.transformer.inter_channel, kernel_size=1, padding=0,
-                                         stride=1, bias=True)
+            self.aspp2 = Conv2dRelu(config.hidden_size, config.transformer.inter_channel, kernel_size=1, padding=0, stride=1)
         else:
-            self.conv_inter = nn.Identity()
+            self.aspp2 = nn.Identity()
 
         self.up_conv1 = nn.Sequential(
             Conv2dRelu(config.rednet.out_dimensions[0] * 2, config.rednet.out_dimensions[1], kernel_size=1, padding=0,
@@ -36,16 +35,16 @@ class Decoder(nn.Module):
         self.up_conv4 = nn.Sequential(
             Conv2dRelu(config.rednet.out_dimensions[3] * 2, config.rednet.out_dimensions[3], kernel_size=1, padding=0,
                        stride=1),
-            Inv2dRelu(config.rednet.out_dimensions[3], kernel_size=7, stride=1),
-            nn.UpsamplingBilinear2d(scale_factor=2)
+            Inv2dRelu(config.rednet.out_dimensions[3], kernel_size=3, stride=1),
+            nn.UpsamplingBilinear2d(scale_factor=2),
         )
 
         self.ra_seg = Ra(in_channels=config.decoder.segmentation_channels, n_classes=config.n_classes,
                          scale_factor=config.decoder.up_scale_factors)
 
     def forward(self, rednet_outs, transformer_out):
-        out1 = self.aspp(rednet_outs[0])
-        out2 = self.conv_inter(transformer_out)
+        out1 = self.aspp1(rednet_outs[0])
+        out2 = self.aspp2(transformer_out)
 
         out2 = F.interpolate(out2, out1.size()[-2:], mode='bilinear',
                              align_corners=True)  # Resize output from two branches

@@ -121,7 +121,7 @@ def test(opt, test_loader, model, epoch, loss_fn, best_loss, best_metrics):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int,
-                        default=30, help='epoch number')
+                        default=100, help='epoch number')
     parser.add_argument('--lr', type=float,
                         default=1e-4, help='learning rate')
     parser.add_argument('--batch_size', type=int,
@@ -136,9 +136,9 @@ if __name__ == '__main__':
                         default='ViT-B_16', help='configs for model, choose from ViT-B_8, '
                                                  'ViT-B_16, ViT-B_32, ViT-L_16, ViT-L_32')
     parser.add_argument('--train_path', type=str,
-                        default='datasets/polyp-dataset/train', help='path to train dataset')
+                        default='datasets/polyp-dataset/TrainDataset', help='path to train dataset')
     parser.add_argument('--test_path', type=str,
-                        default='datasets/polyp-dataset/kvasir', help='path to test dataset')
+                        default='datasets/polyp-dataset/TestDataset/Kvasir', help='path to test dataset')
     parser.add_argument('--output_path', type=str,
                         default='exp{}'.format(datetime.now().strftime('%m%d%H%M')), help='path to output')
     parser.add_argument('--seed', type=int,
