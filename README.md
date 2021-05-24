@@ -21,7 +21,7 @@ improve segmentation accuracy. Our method achieves great result on Kvasir datase
 <p align="center">Figure 1: Architecture of proposed TransInvNet, 
 which consists two parallel branches of RedNet and ViT respectively with a simple decoder.</p>
 
-![alt Figure2](images/segmentation head.png)
+![alt Figure2](images/segmentationhead.png)
 <p align="center">Figure 2: Architecture of attention segmentation module.</p>
 
 ### 1.3 Quantitative Results
@@ -29,14 +29,14 @@ Our train/test split policy follows [PraNet: Parallel Reverse Attention Network 
  images from Kvasir-SEG and 550 images from CVC-ClinicDB are used for training, while rest images of these 2 datasets and CVC-ColonDB, ETIS, test set of Endoscene 
 are used for testing.
 
-![alt Figure3](images/quantitative result1.png)
+![alt Figure3](images/quantitativeresult1.png)
 <p align="center">Figure 3: Quantitative results on Kvasir-SEG and CVC-ClinicDB datasets.</p>
 
-![alt Figure4](images/quantitative result2.png)
+![alt Figure4](images/quantitativeresult2.png)
 <p align="center">Figure 3: Quantitative results on ETIS, Endoscene and CVC-Colon datasets.</p>
 
 ### 1.4 Qualitative Results
-![alt Figure5](images/qualitive result.png)
+![alt Figure5](images/qualitiveresult.png)
 <p align="center">Figure 3: Qualitative results of our proposed TransInvNet compared to PraNet and HarDNet-MSEG.</p>
 
 ## 2. Installation & Usage
