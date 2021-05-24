@@ -41,24 +41,36 @@ are used for testing.
 
 ### 1.5 Directory Tree for TransInvNet
 ```
-TransInvNet
-├── lib
-├── model
-│ ├── backbone
-│ │ ├── base_backbone.py
-│ │ ├── builder.py
-│ │ └── rednet.py
-│ ├── basic_blocks.py
-│ ├── config.py
-│ ├── decoder
-│ │ └── decoder.py
-│ ├── model.py
-│ └── vit
-│     └── vit.py
-└── utils
-    ├── dataloader.py
-    ├── involution_cuda.py
-    └── utils.py
+.
+├── cal_params.py
+├── eval.py
+├── images
+│ ├── framework.png
+│ ├── qualitiveresult.png
+│ ├── quantitativeresult1.png
+│ ├── quantitativeresult2.png
+│ └── segmentationhead.png
+├── inference.py
+├── README.md
+├── requirements.txt
+├── train.py
+├── TransInvNet
+│ ├── model
+│ │ ├── backbone
+│ │ │ ├── base_backbone.py
+│ │ │ ├── builder.py
+│ │ │ └── rednet.py
+│ │ ├── basic_blocks.py
+│ │ ├── config.py
+│ │ ├── decoder
+│ │ │   └── decoder.py
+│ │ ├── model.py
+│ │ └── vit
+│ │     └── vit.py
+│ └── utils
+│     ├── dataloader.py
+│     ├── involution_cuda.py
+│     └── utils.py
 ```
 ## 2. Installation & Usage
 In our experiments, all training/testing are conducted using [Pytorch](https://pytorch.org/) with a single RTX2080 Ti GPU.
