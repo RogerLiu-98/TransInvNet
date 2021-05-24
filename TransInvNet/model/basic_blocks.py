@@ -65,32 +65,6 @@ class Conv2dRelu(nn.Module):
                 m.bias.data.zero_()
 
 
-class ASPP(nn.Module):
-    def __init__(self,
-                 in_channels,
-                 out_channels=256,
-                 rates=[1, 6, 12, 18]):
-        super(ASPP, self).__init__()
-        self.convs = nn.ModuleList([])
-        for rate in rates:
-            if rate == 1:
-                self.convs.append(Conv2dRelu(in_channels, out_channels, kernel_size=1, padding=0, stride=1, bias=False))
-            else:
-                self.convs.append(Conv2dRelu(in_channels, out_channels, kernel_size=3, padding=rate, dilation=rate, bias=False))
-        self.aspp_pool = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            Conv2dRelu(in_channels, out_channels, kernel_size=1, padding=0, stride=1, bias=False)
-        )
-
-    def forward(self, x):
-        size = x.shape[-2:]
-        res = []
-        for conv in self.convs:
-            res.append(conv(x))
-        res.append(F.interpolate(self.aspp_pool(x), size=size, mode='bilinear', align_corners=True))
-        return torch.cat(res, dim=1)
-
-
 class Ra(nn.Module):
     def __init__(self, in_channels, n_classes, scale_factor=4):
         super(Ra, self).__init__()
